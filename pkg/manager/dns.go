@@ -49,13 +49,12 @@ func makeDNSRequests(ctx context.Context, conf tunnel.TunnelConfig) ([]*client.A
 }
 
 func addDNS(ctx context.Context, conf tunnel.TunnelConfig) ([]*client.DelCNAMERequest, error) {
-	// get dns requests
+	// make dns requests from ingress entries
 	reqs, err := makeDNSRequests(ctx, conf)
 	if err != nil {
 		return nil, err
 	}
 
-	// create records async
 	records, err := cli.BatchAddCNAME(ctx, reqs)
 	if err != nil {
 		// cleanup created dns records
@@ -64,8 +63,4 @@ func addDNS(ctx context.Context, conf tunnel.TunnelConfig) ([]*client.DelCNAMERe
 	}
 
 	return records, nil
-}
-
-func delDNS(ctx context.Context, records []*client.DelCNAMERequest) {
-	cli.BatchDelCNAME(ctx, records)
 }

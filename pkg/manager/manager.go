@@ -12,7 +12,7 @@ import (
 
 func Run(ctx context.Context) error {
 	// create tunnel
-	tun, err := tunnel.NewTunnel()
+	tun, err := tunnel.NewTunnel(ctx)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func Run(ctx context.Context) error {
 		return err
 	}
 	// rm dns entries
-	defer delDNS(ctx, records)
+	defer cli.BatchDelCNAME(ctx, records)
 
 	// run tunnel
 	ctx, cancel := context.WithCancelCause(ctx)
