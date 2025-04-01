@@ -21,17 +21,17 @@ func Run(ctx context.Context) error {
 
 	// save config
 	conf := tunnel.NewTunnelConfig(tun.Id)
-	err = conf.Save()
+	err = conf.WriteFile()
 	if err != nil {
 		return err
 	}
 	// add dns entries
-	records, err := conf.AddDNS(ctx)
+	records, err := addDNS(ctx, conf)
 	if err != nil {
 		return err
 	}
 	// rm dns entries
-	defer conf.DelDNS(ctx, records)
+	defer delDNS(ctx, records)
 
 	// run tunnel
 	ctx, cancel := context.WithCancelCause(ctx)
@@ -42,14 +42,13 @@ func Run(ctx context.Context) error {
 	}
 	// cleanup if the tunnel exits early
 	go func() {
-		cmd.Wait()
-		cancel(fmt.Errorf("tunnel exited"))
+		err := cmd.Wait()
+		cancel(err)
 	}()
 	// we should wait for the tunnel process to exit
-	// but cloudflared often hangs on interrupt
-	//defer cmd.Wait()
+	// but it often hangs on interrupt :shrug:
 
-	// Wait for signal
+	// wait for signal
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	select {

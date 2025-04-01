@@ -20,7 +20,10 @@ func NewTunnel() (*Tunnel, error) {
 	name := kvothe.GetRandomName()
 	slog.Info(fmt.Sprintf("Creating tunnel: %s", name))
 
-	cmd := exec.Command("cloudflared", "tunnel", "--origincert", certPath, "create", "--output", "json", name)
+	args := []string{"tunnel"}
+	args = withCert(args)
+	args = append(args, "create", "--output", "json", name)
+	cmd := exec.Command("cloudflared", args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, fmt.Errorf("error creating tunnel: %w", err)
@@ -41,8 +44,9 @@ func (t *Tunnel) Run(ctx context.Context) (*exec.Cmd, error) {
 
 	// construct args
 	args := []string{"tunnel"}
-	args = append(args, "--origincert", certPath)
-	args = append(args, "--config", configPath)
+	args = withCert(args)
+	args = withConfig(args)
+	args = withLogLevel(args)
 	args = append(args, "run", t.Name)
 	cmd := exec.CommandContext(ctx, "cloudflared", args...)
 	cmd.Stdout = log.Writer()
@@ -51,7 +55,20 @@ func (t *Tunnel) Run(ctx context.Context) (*exec.Cmd, error) {
 }
 
 func (t *Tunnel) Delete() {
-	log.Printf("Deleting tunnel: %s", t.Name)
-	exec.Command("cloudflared", "tunnel", "--origincert", certPath, "cleanup", t.Name).Run()
-	exec.Command("cloudflared", "tunnel", "--origincert", certPath, "delete", t.Name).Run()
+	slog.Info("Deleting tunnel", slog.String("name", t.Name))
+	args := []string{"tunnel"}
+	args = withCert(args)
+	args = append(args, "cleanup", t.Name)
+	err := exec.Command("cloudflared", args...).Run()
+	if err != nil {
+		slog.Error("error cleaning up tunnel", slog.String("name", t.Name), slog.String("error", err.Error()))
+	}
+
+	args = []string{"tunnel"}
+	args = withCert(args)
+	args = append(args, "delete", t.Name)
+	err = exec.Command("cloudflared", args...).Run()
+	if err != nil {
+		slog.Error("error deleting tunnel", slog.String("name", t.Name), slog.String("error", err.Error()))
+	}
 }

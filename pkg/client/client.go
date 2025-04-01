@@ -7,21 +7,25 @@ import (
 
 	"github.com/cloudflare/cloudflare-go/v4"
 	"github.com/cloudflare/cloudflare-go/v4/dns"
+	"github.com/cloudflare/cloudflare-go/v4/option"
 	"github.com/cloudflare/cloudflare-go/v4/zones"
 	"github.com/njayp/limiter"
 )
+
+var sharedLimiter = limiter.NewLimiter(1200, time.Minute*5, time.Millisecond*50)
 
 type Client struct {
 	api     *cloudflare.Client
 	limiter *limiter.Limiter
 }
 
-func NewClient() *Client {
+// NewClient creates a new cloudflare client with a shared rate limiter.
+func NewClient(opts ...option.RequestOption) *Client {
 	return &Client{
-		api: cloudflare.NewClient(),
+		api: cloudflare.NewClient(opts...),
 		// cloudflare api rate limits are 1200 requests per 5 minutes
 		// limiter also staggers requests by 50ms
-		limiter: limiter.NewLimiter(1200, time.Minute*5, time.Millisecond*50),
+		limiter: sharedLimiter,
 	}
 }
 
