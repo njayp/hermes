@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -40,9 +41,9 @@ func (c TunnelConfig) Save() error {
 	return os.WriteFile(configPath, data, 0644)
 }
 
-func (c TunnelConfig) AddDNS(ctx context.Context) ([]client.DelCNAMERequest, error) {
+func (c TunnelConfig) AddDNS(ctx context.Context) ([]*client.DelCNAMERequest, error) {
 	zoneIdMap := make(map[string]string)
-	recordsMap := make(map[string]client.AddCNAMERequest)
+	reqs := []*client.AddCNAMERequest{}
 	// process ingress entries
 	for _, ie := range c.Ingress {
 		split := strings.Split(ie.Hostname, ".")
@@ -55,11 +56,10 @@ func (c TunnelConfig) AddDNS(ctx context.Context) ([]client.DelCNAMERequest, err
 		// get zone id
 		zoneId, ok := zoneIdMap[host]
 		if !ok {
-			zone, err := c.cli.GetZoneID(ctx, client.GetZoneIDRequest{
+			zone, err := c.cli.GetZoneID(ctx, &client.GetZoneIDRequest{
 				Name: host,
 			})
 			if err != nil {
-				// TODO gracefully exit
 				return nil, err
 			}
 
@@ -68,41 +68,48 @@ func (c TunnelConfig) AddDNS(ctx context.Context) ([]client.DelCNAMERequest, err
 		}
 
 		// create record request
-		record := client.AddCNAMERequest{
+		reqs = append(reqs, &client.AddCNAMERequest{
 			Name:    name,
 			Content: c.Id + ".cfargotunnel.com",
 			ZoneID:  zoneId,
-		}
-		recordsMap[host] = record
+		})
 	}
 
 	// create records async
-	ch := make(chan client.DelCNAMERequest, len(c.Ingress))
-	for _, v := range recordsMap {
+	ch := make(chan *client.DelCNAMERequest, len(c.Ingress))
+	for _, req := range reqs {
 		go func() {
-			slog.Debug("creating dns record", "name", v.Name, "zone", v.ZoneID)
+			slog.Debug("creating dns record", "name", req.Name, "zone", req.ZoneID)
 			// send create request
-			record, err := c.cli.AddCNAME(ctx, v)
+			record, err := c.cli.AddCNAME(ctx, req)
 			if err != nil {
-				// TODO gracefully exit
 				slog.Error(err.Error())
+				ch <- nil
+				return
 			}
 
-			// create delete request
-			delRecord := client.DelCNAMERequest{
-				ZoneID:   v.ZoneID,
+			// send delete request
+			ch <- &client.DelCNAMERequest{
+				ZoneID:   req.ZoneID,
 				RecordID: record.ID,
 			}
-
-			// send to channel
-			ch <- delRecord
 		}()
 	}
 
 	// records array doubles as wait group
-	records := make([]client.DelCNAMERequest, 0, len(recordsMap))
-	for range recordsMap {
-		records = append(records, <-ch)
+	records := make([]*client.DelCNAMERequest, 0, len(reqs))
+	ok := true
+	for range reqs {
+		record := <-ch
+		if record == nil {
+			ok = false
+			continue
+		}
+		records = append(records, record)
+	}
+	if !ok {
+		c.DelDNS(ctx, records)
+		return nil, fmt.Errorf("failed to create dns records")
 	}
 
 	return records, nil
@@ -110,13 +117,14 @@ func (c TunnelConfig) AddDNS(ctx context.Context) ([]client.DelCNAMERequest, err
 
 // DelDNS deletes the DNS records created by AddDNS. It blocks until all
 // records are deleted.
-func (c *TunnelConfig) DelDNS(ctx context.Context, records []client.DelCNAMERequest) {
+func (c *TunnelConfig) DelDNS(ctx context.Context, records []*client.DelCNAMERequest) {
 	wg := sync.WaitGroup{}
 	for _, record := range records {
 		wg.Add(1)
 		// delete records async
 		go func() {
 			defer wg.Done()
+
 			// send delete request
 			_, err := c.cli.DelCNAME(ctx, record)
 			if err != nil {

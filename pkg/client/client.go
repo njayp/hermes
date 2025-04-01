@@ -25,7 +25,7 @@ func NewClient() *Client {
 	}
 }
 
-func (c *Client) AddCNAME(ctx context.Context, req AddCNAMERequest) (*dns.RecordResponse, error) {
+func (c *Client) AddCNAME(ctx context.Context, req *AddCNAMERequest) (*dns.RecordResponse, error) {
 	err := c.limiter.Wait(ctx)
 	if err != nil {
 		return nil, err
@@ -43,7 +43,7 @@ func (c *Client) AddCNAME(ctx context.Context, req AddCNAMERequest) (*dns.Record
 	})
 }
 
-func (c *Client) DelCNAME(ctx context.Context, req DelCNAMERequest) (*dns.RecordDeleteResponse, error) {
+func (c *Client) DelCNAME(ctx context.Context, req *DelCNAMERequest) (*dns.RecordDeleteResponse, error) {
 	err := c.limiter.Wait(ctx)
 	if err != nil {
 		return nil, err
@@ -54,7 +54,7 @@ func (c *Client) DelCNAME(ctx context.Context, req DelCNAMERequest) (*dns.Record
 	})
 }
 
-func (c *Client) GetZoneID(ctx context.Context, req GetZoneIDRequest) (*zones.Zone, error) {
+func (c *Client) GetZoneID(ctx context.Context, req *GetZoneIDRequest) (*zones.Zone, error) {
 	err := c.limiter.Wait(ctx)
 	if err != nil {
 		return nil, err

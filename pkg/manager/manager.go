@@ -40,21 +40,22 @@ func Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	// wait for the tunnel to close before cleaning up
-	defer cmd.Wait()
 	// cleanup if the tunnel exits early
 	go func() {
 		cmd.Wait()
 		cancel(fmt.Errorf("tunnel exited"))
 	}()
+	// we should wait for the tunnel process to exit
+	// but cloudflared often hangs on interrupt
+	//defer cmd.Wait()
 
 	// Wait for signal
-	intCh := make(chan os.Signal, 1)
-	signal.Notify(intCh, os.Interrupt, syscall.SIGTERM)
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt, syscall.SIGTERM)
 	select {
 	case <-ctx.Done():
 		return context.Cause(ctx)
-	case sig := <-intCh:
+	case sig := <-ch:
 		err := fmt.Errorf("received signal: %s", sig)
 		cancel(err)
 		return err

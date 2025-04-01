@@ -38,13 +38,12 @@ func NewTunnel() (*Tunnel, error) {
 
 func (t *Tunnel) Run(ctx context.Context) (*exec.Cmd, error) {
 	log.Printf("Running tunnel: %s", t.Name)
+
+	// construct args
 	args := []string{"tunnel"}
 	args = append(args, "--origincert", certPath)
 	args = append(args, "--config", configPath)
-	args = append(args, "--grace-period", "5s")
-	//args = append(args, "--loglevel", "debug")
-	args = append(args, "run")
-	args = append(args, t.Name)
+	args = append(args, "run", t.Name)
 	cmd := exec.CommandContext(ctx, "cloudflared", args...)
 	cmd.Stdout = log.Writer()
 	cmd.Stderr = log.Writer()
